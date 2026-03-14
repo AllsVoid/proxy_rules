@@ -1,0 +1,51 @@
+name: Auto Merge and Update AI Rules
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  update-rules:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download, Merge and Deduplicate
+        run: |
+          echo "开始下载上游规则..."
+          curl -sL "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/refs/heads/master/rule/Clash/Gemini/Gemini.list" > Gemini.list
+          curl -sL "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/refs/heads/master/rule/Clash/OpenAI/OpenAI.list" > OpenAI.list
+          curl -sL "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/refs/heads/master/rule/Clash/Claude/Claude.list" > Claude.list
+
+          
+          echo "生成新文件..."
+          # 核心处理逻辑：
+          # a. cat: 合并文件
+          # b. grep -v "^#": 剔除原文件中的注释行
+          # c. grep -v "^$": 剔除空行
+          # d. sort -u: 排序并去除重复的行！
+          cat Gemini.list OpenAI.list Claude.list | grep -v "^#" | grep -v "^$" | sort -u > Mihomo/AI.list
+          
+          # 清理临时文件
+          rm Gemini.list OpenAI.list Claude.list
+
+      - name: Check for changes and Commit
+        run: |
+          # 配置 Git 机器人信息
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # 将生成的新规则文件加入 Git 追踪
+          git add Mihomo/AI.list
+          
+          # 检查暂存区是否有变动
+          if ! git diff --staged --quiet; then
+            echo "检测到规则有更新，正在提交..."
+            git commit -m "chore: auto update rules $(date +'%Y-%m-%d')"
+            git push
+          else
+            echo "规则没有变化，无需提交。"
+          fi
